@@ -9,8 +9,9 @@ resolucionesY = [1080,1440,2160]
 
 Image.MAX_IMAGE_PIXELS = 933120000
 
-fileIMGTypes = ['.jpg','.png','.jpeg']
-fileVIDTypes = ['.mp4', '.mov']
+fileIMGTypes = ['.jpg', '.jpeg','.png','.gif','.bmp','.tiff', '.tif','.webp','.heic','.raw',]
+
+fileVIDTypes = ['.mp4','.mov','.avi','.mkv','.flv','.wmv','.webm','.mpeg', '.mpg','.3gp','.m4v',]
 
 CanvasColor = (241,241,241)
 

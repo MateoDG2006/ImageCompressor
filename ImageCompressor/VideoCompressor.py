@@ -2,8 +2,10 @@ from multiprocessing import Pool
 import subprocess
 import os
 import sys
+import re
 import ast
 import pandas as pd
+import tempfile
 
 class VideoFile:
     def __init__(self, path, folder, output_folder):
@@ -37,7 +39,7 @@ def VideoCompressor(input_file):
         First_screenshot_file = os.path.join(input_file.output_folder, f"PrimerFrame_{input_file.name}.jpg")
         subprocess.run([
             "ffmpeg", "-i", input_file.path,
-            "-ss", "00:00:01", "-vframes", "1", First_screenshot_file 
+            "-ss", "00:00:00", "-vframes", "1", First_screenshot_file 
         ], check=True)
         print(f"Primer frame guardado")
         Last_screenshot_file = os.path.join(input_file.output_folder, f"UltimoFrame_{input_file.name}.jpg")
@@ -46,16 +48,91 @@ def VideoCompressor(input_file):
         ],check=True)
         print(f"Ultimo frame guardado")
 
-    subprocess.run([
-        "ffmpeg", "-i", input_file.path,
-        "-vcodec", "libx264", "-crf", "23", output_file
-    ], check=True)
+    black_frames = DetectBlackFrames(input_file)
+    
+    if not black_frames:
+        subprocess.run([
+            "ffmpeg", "-i", input_file.path,
+            "-vcodec", "libx264", "-crf", "23", output_file
+        ], check=True)
+    else:
+        Erase_Compress_BlackFrames(input_file, black_frames)
+
+
+
 
     print(f"Video {input_file.name} procesado.\n")
 
 def PoolVideoCompressor(video_poolArray):
     with Pool(processes=4) as pool:
         pool.map(VideoCompressor, video_poolArray)
+
+def DetectBlackFrames(input_file):
+    black_frames_detect = [
+        "ffmpeg", "-i", input_file.path,
+        "-vf", f"blackdetect=d={0.1}:pic_th={0.98}",
+        "-an", "-f", "null", "-"
+    ]
+    black_detection = subprocess.run(black_frames_detect, stderr=subprocess.PIPE, text=True)
+    black_frames = re.findall[
+        r"black_start:(\d+\.\d+)\s+black_end:(\d+\.\d+)\s+black_duration:(\d+\.\d+)",
+        black_detection.stderr
+    ]
+    black_frames = [
+        {"start": float(s), "end": float(e), "duration": float(d)}
+        for s, e, d in black_frames
+    ]
+
+    return black_frames
+
+def Erase_Compress_BlackFrames(input_file,black_frames):
+    # 2. Crear archivo de lista para FFmpeg concat
+    temp_list_path = tempfile.mktemp(suffix=".txt")
+    duration = float(subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=noprint_wrappers=1:nokey=1", input_file.path],
+        stdout=subprocess.PIPE, text=True
+    ).stdout.strip())
+
+    # Calcular segmentos buenos
+    keep_segments = []
+    last_end = 0.0
+    for seg in black_frames:
+        if last_end < seg["start"]:
+            keep_segments.append((last_end, seg["start"]))
+        last_end = seg["end"]
+    if last_end < duration:
+        keep_segments.append((last_end, duration))
+
+    # Extraer y guardar cada segmento en archivos temporales
+    temp_files = []
+    for i, (start, end) in enumerate(keep_segments):
+        temp_file = tempfile.mktemp(suffix=".mp4")
+        subprocess.run([
+            "ffmpeg", "-i", input_file.path, "-ss", str(start), "-to", str(end),
+            "-c:v", "libx264", "-crf", "23",
+            "-c:a", "copy", temp_file
+        ], check=True)
+        temp_files.append(temp_file)
+
+    # Crear lista para concat
+    with open(temp_list_path, "w") as f:
+        for tf in temp_files:
+            f.write(f"file '{tf}'\n")
+
+    # Unir segmentos sin los frames negros
+    subprocess.run([
+        "ffmpeg", "-f", "concat", "-safe", "0", "-i", temp_list_path,
+        "-c:v", "libx264", "-crf", "23",  # compresión video
+        "-preset", "fast",                # velocidad de compresión
+        "-c:a", "aac", "-b:a", "192k",    # compresión audio
+        os.path.join(input_file.output_folder, f"Comp_{input_file.name}.mp4")
+    ], check=True)
+
+    # Limpiar temporales
+    os.remove(temp_list_path)
+    for tf in temp_files:
+        os.remove(tf)
 
 if __name__ == '__main__':
     video_poolArray =[]
