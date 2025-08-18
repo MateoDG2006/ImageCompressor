@@ -4,10 +4,8 @@ import os
 import sys
 import re
 import ast
-import pandas as pd
 import tempfile
 import math
-# -*- coding: utf-8 -*-
 
 def round_up_decimal(num, dec_places):
     multiplier = 10 ** dec_places
@@ -115,7 +113,6 @@ def DetectBlackFrames(input_file):
     return black_frames
 
 def Erase_Compress_BlackFrames(input_file,black_frames):
-    # 2. Crear archivo de lista para FFmpeg concat
     temp_list_path = tempfile.mktemp(suffix=".txt")
     duration = float(subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration",
@@ -123,7 +120,6 @@ def Erase_Compress_BlackFrames(input_file,black_frames):
         stdout=subprocess.PIPE, text=True
     ).stdout.strip())
 
-    # Calcular segmentos buenos
     keep_segments = []
     last_end = 0.0
     for seg in black_frames:
@@ -133,7 +129,6 @@ def Erase_Compress_BlackFrames(input_file,black_frames):
     if last_end < duration:
         keep_segments.append((last_end, duration))
 
-    # Extraer y guardar cada segmento en archivos temporales
     temp_files = []
     for i, (start, end) in enumerate(keep_segments):
         temp_file = tempfile.mktemp(suffix=".mp4")
@@ -144,17 +139,15 @@ def Erase_Compress_BlackFrames(input_file,black_frames):
         ], check=True)
         temp_files.append(temp_file)
 
-    # Crear lista para concat
     with open(temp_list_path, "w") as f:
         for tf in temp_files:
             f.write(f"file '{tf}'\n")
 
-    # Unir segmentos sin los frames negros
     subprocess.run([
         "ffmpeg", "-f", "concat", "-safe", "0", "-i", temp_list_path,
-        "-c:v", "libx264", "-crf", "23",  # compresion video
-        "-preset", "fast",                # velocidad de compresion
-        "-c:a", "aac", "-b:a", "192k",    # compresion audio
+        "-c:v", "libx264", "-crf", "23",  
+        "-preset", "fast",
+        "-c:a", "aac", "-b:a", "192k",
         os.path.join(input_file.output_folder, f"Comp_{input_file.name}.mp4")
     ], check=True)
 
@@ -178,7 +171,6 @@ def Erase_Compress_BlackFrames(input_file,black_frames):
         ],check=True)
         print(f"Ultimo frame guardado")
 
-    # Limpiar temporales
     os.remove(temp_list_path)
     for tf in temp_files:
         os.remove(tf)

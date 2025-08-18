@@ -3,17 +3,21 @@ import sys
 from multiprocessing import Process, Pool
 import subprocess
 import os
+import json
 
-resolucionesX = [1920,2560,3840]
-resolucionesY = [1080,1440,2160]
+with open("config/defaultConfig.json", "r", encoding="utf-8") as f:
+    config = json.load(f)
+
+resolucionesX = config["resolucionesX"]
+resolucionesY = config["resolucionesY"]
 
 Image.MAX_IMAGE_PIXELS = 933120000
 
-fileIMGTypes = ['.jpg', '.jpeg','.png','.gif','.bmp','.tiff', '.tif','.webp','.heic','.raw',]
+fileIMGTypes = config["fileIMGTypes"]
 
-fileVIDTypes = ['.mp4','.mov','.avi','.mkv','.flv','.wmv','.webm','.mpeg', '.mpg','.3gp','.m4v',]
+fileVIDTypes = config["fileVIDTypes"]
 
-CanvasColor = (241,241,241)
+CanvasColor = tuple(config["CanvasColor"])
 
 video_poolArray = {
 	"paths": [],
@@ -43,8 +47,8 @@ class ImageFile:
 	def DetermineCanvasResolution(self,dimensions):	
 		distanceY = 0
 
-		imageSizeX = dimensions[0] # Tamaño en X
-		imageSizeY = dimensions[1] # Tamaño en Y
+		imageSizeX = dimensions[0]
+		imageSizeY = dimensions[1]
 
 		min_distanceX = imageSizeX - resolucionesX[0]
 		min_distanceY = imageSizeY - resolucionesY[0]
@@ -65,9 +69,9 @@ class ImageFile:
 				min_sizeY = resolution
 
 		if min_distanceX < min_distanceY:
-			min_sizeY = resolucionesY[resolucionesX.index(min_sizeX)]  # Ajustar Y al mismo índice de X
+			min_sizeY = resolucionesY[resolucionesX.index(min_sizeX)]
 		elif min_distanceY < min_distanceX:
-			min_sizeX = resolucionesX[resolucionesY.index(min_sizeY)] # Ajustar X al mismo índice de Y
+			min_sizeX = resolucionesX[resolucionesY.index(min_sizeY)]
 		elif min_distanceX == min_distanceY:
 			if imageSizeX > imageSizeY:
 				min_sizeX = imageSizeX
@@ -182,7 +186,6 @@ while True:
 	ScannerFolder(folder)
 	if video_poolArray:
 		print("Procesando videos...")
-        # Ruta de tu script de compresión
 		script_path = os.path.abspath("VideoCompressor.py")
 
 		# Abre una nueva terminal y ejecuta el script
